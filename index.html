@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Cyber Strike - Arcade Mobile</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    body {
+      background: #05050f;
+      color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    #game-container {
+      position: relative;
+      width: 100vw;
+      max-width: 480px;
+      height: 100vh;
+      max-height: 850px;
+      background: radial-gradient(circle at center, #0d0b24 0%, #03020a 100%);
+      box-shadow: 0 0 30px rgba(0, 240, 255, 0.2);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    canvas {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    /* HUD Overlays */
+    #hud {
+      position: absolute;
+      top: 12px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      justify-content: space-between;
+      pointer-events: none;
+      font-weight: bold;
+      text-shadow: 0 0 8px #00f0ff;
+      z-index: 5;
+    }
+    .hud-box {
+      font-size: 15px;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(0, 240, 255, 0.4);
+    }
+    /* Touch Controls */
+    #controls {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      right: 0;
+      height: 120px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 20px;
+      z-index: 10;
+    }
+    .dpad {
+      display: flex;
+      gap: 15px;
+    }
+    .btn {
+      width: 65px;
+      height: 65px;
+      background: rgba(10, 20, 40, 0.65);
+      border: 2px solid #00f0ff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      color: #00f0ff;
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+    }
+    .btn:active {
+      background: #00f0ff;
+      color: #000;
+      transform: scale(0.92);
+    }
+    .btn-fire {
+      width: 75px;
+      height: 75px;
+      border-color: #ff0077;
+      color: #ff0077;
+      box-shadow: 0 0 15px rgba(255, 0, 119, 0.4);
+    }
+    .btn-fire:active {
+      background: #ff0077;
+      color: #fff;
+    }
+    /* Menus & Overlays */
+    #start-screen, #game-over-screen {
+      position: absolute;
+      inset: 0;
+      background: rgba(5, 5, 15, 0.88);
+      backdrop-filter: blur(6px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      z-index: 20;
+    }
+    .hidden {
+      display: none !important;
+    }
+    h1 {
+      font-size: 32px;
+      letter-spacing: 2px;
+      color: #00f0ff;
+      text-shadow: 0 0 15px #00f0ff;
+    }
+    .play-btn {
+      padding: 14px 34px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #05050f;
+      background: linear-gradient(45deg, #00f0ff, #ff0077);
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <div id="hud">
+      <div class="hud-box">SCORE: <span id="score-val">0</span></div>
+      <div class="hud-box">HP: <span id="hp-val">❤️❤️❤️</span></div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Mobile Touch Buttons -->
+    <div id="controls">
+      <div class="dpad">
+        <div class="btn" id="btn-left">◀</div>
+        <div class="btn" id="btn-right">▶</div>
+      </div>
+      <div class="btn btn-fire" id="btn-shoot">🔥</div>
+    </div>
+
+    <!-- Start Overlay -->
+    <div id="start-screen">
+      <h1>CYBER STRIKE</h1>
+      <p style="color: #bbb; text-align: center; padding: 0 20px;">Touch buttons se ship ko control karo aur dushmano ko udao!</p>
+      <button class="play-btn" id="start-btn">START GAME</button>
+    </div>
+
+    <!-- Game Over Overlay -->
+    <div id="game-over-screen" class="hidden">
+      <h1 style="color: #ff0055; text-shadow: 0 0 15px #ff0055;">GAME OVER</h1>
+      <p style="font-size: 20px;">Score: <span id="final-score">0</span></p>
+      <button class="play-btn" id="restart-btn">PLAY AGAIN</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreVal = document.getElementById('score-val');
+    const hpVal = document.getElementById('hp-val');
+    const startScreen = document.getElementById('start-screen');
+    const gameOverScreen = document.getElementById('game-over-screen');
+    const finalScore = document.getElementById('final-score');
+
+    // Resize Canvas to fit mobile screens
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    // Audio Synth (Zero external files needed)
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playBeep(freq, type = 'sine', duration = 0.1) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    // Game Variables
+    let gameActive = false;
+    let score = 0;
+    let lives = 3;
+    let keys = { left: false, right: false, shoot: false };
+
+    // Player Object
+    const player = {
+      x: canvas.width / 2,
+      y: canvas.height - 140,
+      width: 38,
+      height: 38,
+      speed: 6,
+      lastShot: 0
+    };
+
+    let bullets = [];
+    let enemies = [];
+    let particles = [];
+    let stars = Array.from({ length: 40 }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      speed: Math.random() * 2 + 1,
+      size: Math.random() * 2
+    }));
+
+    // Touch Event Listeners
+    function setupTouch(id, keyName) {
+      const btn = document.getElementById(id);
+      btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; });
+      btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; });
+      btn.addEventListener('mousedown', () => keys[keyName] = true);
+      btn.addEventListener('mouseup', () => keys[keyName] = false);
+    }
+    setupTouch('btn-left', 'left');
+    setupTouch('btn-right', 'right');
+    setupTouch('btn-shoot', 'shoot');
+
+    // Keyboard support (for testing on PC/Laptop)
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+      if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+      if (e.key === ' ' || e.key === 'ArrowUp') keys.shoot = true;
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+      if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
+      if (e.key === ' ' || e.key === 'ArrowUp') keys.shoot = false;
+    });
+
+    function spawnEnemy() {
+      if (!gameActive) return;
+      const size = 30;
+      enemies.push({
+        x: Math.random() * (canvas.width - size),
+        y: -size,
+        width: size,
+        height: size,
+        speed: Math.random() * 2 + 2
+      });
+      setTimeout(spawnEnemy, Math.max(500, 1500 - score * 10));
+    }
+
+    function createExplosion(x, y, color = '#ff0055') {
+      for (let i = 0; i < 12; i++) {
+        particles.push({
+          x, y,
+          vx: (Math.random() - 0.5) * 6,
+          vy: (Math.random() - 0.5) * 6,
+          life: 1,
+          color
+        });
+      }
+    }
+
+    function shootBullet() {
+      const now = Date.now();
+      if (now - player.lastShot > 180) {
+        bullets.push({ x: player.x, y: player.y - 10, width: 4, height: 12, speed: 9 });
+        playBeep(600, 'square', 0.08);
+        player.lastShot = now;
+      }
+    }
+
+    function update() {
+      if (!gameActive) return;
+
+      // Player Movement
+      if (keys.left && player.x > player.width / 2) player.x -= player.speed;
+      if (keys.right && player.x < canvas.width - player.width / 2) player.x += player.speed;
+      if (keys.shoot) shootBullet();
+
+      // Bullets Update
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        bullets[i].y -= bullets[i].speed;
+        if (bullets[i].y < -20) bullets.splice(i, 1);
+      }
+
+      // Enemies Update
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        e.y += e.speed;
+
+        // Player Collision
+        if (Math.hypot(player.x - (e.x + e.width / 2), player.y - (e.y + e.height / 2)) < 26) {
+          createExplosion(player.x, player.y, '#00f0ff');
+          enemies.splice(i, 1);
+          lives--;
+          hpVal.textContent = '❤️'.repeat(lives);
+          playBeep(120, 'sawtooth', 0.25);
+          if (lives <= 0) endGame();
+          continue;
+        }
+
+        // Offscreen
+        if (e.y > canvas.height) {
+          enemies.splice(i, 1);
+          continue;
+        }
+
+        // Bullet Hit
+        for (let j = bullets.length - 1; j >= 0; j--) {
+          const b = bullets[j];
+          if (b.x > e.x && b.x < e.x + e.width && b.y > e.y && b.y < e.y + e.height) {
+            createExplosion(e.x + e.width / 2, e.y + e.height / 2, '#ffaa00');
+            enemies.splice(i, 1);
+            bullets.splice(j, 1);
+            score += 10;
+            scoreVal.textContent = score;
+            playBeep(320, 'triangle', 0.12);
+            break;
+          }
+        }
+      }
+
+      // Particles Update
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.04;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+
+      // Starfield Update
+      stars.forEach(s => {
+        s.y += s.speed;
+        if (s.y > canvas.height) s.y = 0;
+      });
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Stars
+      ctx.fillStyle = '#445';
+      stars.forEach(s => ctx.fillRect(s.x, s.y, s.size, s.size));
+
+      // Player Ship
+      ctx.fillStyle = '#00f0ff';
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = '#00f0ff';
+      ctx.beginPath();
+      ctx.moveTo(player.x, player.y - 18);
+      ctx.lineTo(player.x - 18, player.y + 14);
+      ctx.lineTo(player.x + 18, player.y + 14);
+      ctx.closePath();
+      ctx.fill();
+
+      // Bullets
+      ctx.fillStyle = '#ff0077';
+      ctx.shadowColor = '#ff0077';
+      bullets.forEach(b => ctx.fillRect(b.x - b.width / 2, b.y, b.width, b.height));
+
+      // Enemies
+      ctx.fillStyle = '#ff3333';
+      ctx.shadowColor = '#ff3333';
+      enemies.forEach(e => {
+        ctx.beginPath();
+        ctx.arc(e.x + e.width / 2, e.y + e.height / 2, e.width / 2, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Particles
+      ctx.shadowBlur = 4;
+      particles.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.fillRect(p.x, p.y, 3, 3);
+      });
+
+      ctx.shadowBlur = 0;
+    }
+
+    function gameLoop() {
+      update();
+      render();
+      if (gameActive) requestAnimationFrame(gameLoop);
+    }
+
+    function startGame() {
+      score = 0;
+      lives = 3;
+      bullets = [];
+      enemies = [];
+      particles = [];
+      player.x = canvas.width / 2;
+      player.y = canvas.height - 140;
+      scoreVal.textContent = '0';
+      hpVal.textContent = '❤️❤️❤️';
+      startScreen.classList.add('hidden');
+      gameOverScreen.classList.add('hidden');
+      gameActive = true;
+      spawnEnemy();
+      requestAnimationFrame(gameLoop);
+    }
+
+    function endGame() {
+      gameActive = false;
+      finalScore.textContent = score;
+      gameOverScreen.classList.remove('hidden');
+    }
+
+    document.getElementById('start-btn').addEventListener('click', startGame);
+    document.getElementById('restart-btn').addEventListener('click', startGame);
+  </script>
+</body>
+</html>
